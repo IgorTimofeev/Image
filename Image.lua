@@ -1,51 +1,40 @@
 
--------------------------------------------------- Libraries --------------------------------------------------
-
+local computer = require("computer")
 local color = require("color")
 local unicode = require("unicode")
 local fs = require("filesystem")
 local gpu = require("component").gpu
 
--------------------------------------------------- Constants --------------------------------------------------
+-------------------------------------------------------------------------------
 
-local image = {}
-image.formatModules = {}
+local image = {formatModules = {}}
 
--------------------------------------------------- Low-level methods --------------------------------------------------
+-------------------------------------------------------------------------------
 
-function image.iterationYield(iteration)
-	if iteration % 603 == 0 then os.sleep(0) end
-end
-
-function image.getImageCoordinatesByIndex(index, width)
-	local integer, fractional = math.modf((index - 2) / (width * 4))
-	return math.ceil(fractional * width), integer + 1
-end
-
-function image.getImageIndexByCoordinates(x, y, width)
-	return (width * 4) * (y - 1) + x * 4 - 1
+function image.getIndex(x, y, width)
+	return width * (y - 1) + x
 end
 
 function image.group(picture, compressColors)
-	local groupedPicture, x, y, iPlus2, iPlus3, background, foreground = {}, 1, 1
+	local groupedPicture, x, y, background, foreground = {}, 1, 1
 
-	for i = 3, #picture, 4 do
-		iPlus2, iPlus3 = i + 2, i + 3
-
+	for i = 1, #picture[3] do
 		if compressColors then
-			background, foreground = color.to8Bit(picture[i]), color.to8Bit(picture[i + 1])
-			image.iterationYield(i)
+			background, foreground = color.to8Bit(picture[3][i]), color.to8Bit(picture[4][i])
+			if i % 603 == 0 then
+				computer.pullSignal(0)
+			end
 		else
-			background, foreground = picture[i], picture[i + 1]
+			background, foreground = picture[3][i], picture[4][i]
 		end
 
-		groupedPicture[picture[iPlus2]] = groupedPicture[picture[iPlus2]] or {}
-		groupedPicture[picture[iPlus2]][picture[iPlus3]] = groupedPicture[picture[iPlus2]][picture[iPlus3]] or {}
-		groupedPicture[picture[iPlus2]][picture[iPlus3]][background] = groupedPicture[picture[iPlus2]][picture[iPlus3]][background] or {}
-		groupedPicture[picture[iPlus2]][picture[iPlus3]][background][foreground] = groupedPicture[picture[iPlus2]][picture[iPlus3]][background][foreground] or {}
-		groupedPicture[picture[iPlus2]][picture[iPlus3]][background][foreground][y] = groupedPicture[picture[iPlus2]][picture[iPlus3]][background][foreground][y] or {}
+		groupedPicture[picture[5][i]] = groupedPicture[picture[5][i]] or {}
+		groupedPicture[picture[5][i]][picture[6][i]] = groupedPicture[picture[5][i]][picture[6][i]] or {}
+		groupedPicture[picture[5][i]][picture[6][i]][background] = groupedPicture[picture[5][i]][picture[6][i]][background] or {}
+		groupedPicture[picture[5][i]][picture[6][i]][background][foreground] = groupedPicture[picture[5][i]][picture[6][i]][background][foreground] or {}
+		groupedPicture[picture[5][i]][picture[6][i]][background][foreground][y] = groupedPicture[picture[5][i]][picture[6][i]][background][foreground][y] or {}
 
-		table.insert(groupedPicture[picture[iPlus2]][picture[iPlus3]][background][foreground][y], x)
+		table.insert(groupedPicture[picture[5][i]][picture[6][i]][background][foreground][y], x)
 
 		x = x + 1
 		if x > picture[1] then
@@ -105,46 +94,46 @@ function image.draw(x, y, picture)
 end
 
 function image.create(width, height, background, foreground, alpha, symbol, random)
-	local picture = {width, height}
+	local picture = {width, height, {}, {}, {}, {}}
 
 	for i = 1, width * height do
-		table.insert(picture, random and math.random(0x0, 0xFFFFFF) or (background or 0x0))
-		table.insert(picture, random and math.random(0x0, 0xFFFFFF) or (foreground or 0x0))
-		table.insert(picture, alpha or 0x0)
-		table.insert(picture, random and string.char(math.random(65, 90)) or (symbol or " "))
+		table.insert(picture[3], random and math.random(0x0, 0xFFFFFF) or (background or 0x0))
+		table.insert(picture[4], random and math.random(0x0, 0xFFFFFF) or (foreground or 0x0))
+		table.insert(picture[5], alpha or 0x0)
+		table.insert(picture[6], random and string.char(math.random(65, 90)) or (symbol or " "))
 	end
 
 	return picture
 end
 
 function image.copy(picture)
-	local newPicture = {}
-	for i = 1, #picture do
-		table.insert(newPicture, picture[i])
+	local newPicture = {picture[1], picture[2], {}, {}, {}, {}}
+	
+	for i = 1, #picture[3] do
+		newPicture[3][i] = picture[3][i]
+		newPicture[4][i] = picture[4][i]
+		newPicture[5][i] = picture[5][i]
+		newPicture[6][i] = picture[6][i]
 	end
 
 	return newPicture
 end
 
 function image.optimize(picture)
-	local iPlus1, iPlus2, iPlus3
-
-	for i = 3, #picture, 4 do
-		iPlus1, iPlus2, iPlus3 = i + 1, i + 2, i + 3
-
-		if picture[i] == picture[iPlus1] and (picture[iPlus3] == "▄" or picture[iPlus3] == "▀") then
-			picture[iPlus3] = " "
+	for i = 1, #picture[3] do
+		if picture[3][i] == picture[4][i] and (picture[6][i] == "▄" or picture[6][i] == "▀") then
+			picture[6][i] = " "
 		end
 		
-		if picture[iPlus3] == " " then		
-			picture[iPlus1] = 0x000000
+		if picture[6][i] == " " then		
+			picture[4][i] = 0x0
 		end
 	end
 
 	return picture
 end
 
--------------------------------------------------- Filesystem related methods --------------------------------------------------
+-------------------------------------------------------------------------------
 
 function image.loadFormatModule(path, extension)
 	local success, result = loadfile(path)
@@ -182,7 +171,7 @@ function image.load(path)
 	return loadOrSave("load", path)
 end
 
--------------------------------------------------- Image serialization --------------------------------------------------
+-------------------------------------------------------------------------------
 
 function image.toString(picture)
 	local charArray = {
@@ -190,13 +179,15 @@ function image.toString(picture)
 		string.format("%02X", picture[2])
 	}
 	
-	for i = 3, #picture, 4 do
-		table.insert(charArray, string.format("%02X", color.to8Bit(picture[i])))
-		table.insert(charArray, string.format("%02X", color.to8Bit(picture[i + 1])))
-		table.insert(charArray, string.format("%02X", math.floor(picture[i + 2] * 255)))
-		table.insert(charArray, picture[i + 3])
+	for i = 1, #picture[3] do
+		table.insert(charArray, string.format("%02X", color.to8Bit(picture[3][i])))
+		table.insert(charArray, string.format("%02X", color.to8Bit(picture[4][i])))
+		table.insert(charArray, string.format("%02X", math.floor(picture[5][i] * 255)))
+		table.insert(charArray, picture[6][i])
 
-		image.iterationYield(i)
+		if i % 603 == 0 then
+			computer.pullSignal(0)
+		end
 	end
 
 	return table.concat(charArray)
@@ -205,31 +196,32 @@ end
 function image.fromString(pictureString)
 	local picture = {
 		tonumber("0x" .. unicode.sub(pictureString, 1, 2)),
-		tonumber("0x" .. unicode.sub(pictureString, 3, 4))
+		tonumber("0x" .. unicode.sub(pictureString, 3, 4)),
+		{}, {}, {}, {}
 	}
 
 	for i = 5, unicode.len(pictureString), 7 do
-		table.insert(picture, color.to24Bit(tonumber("0x" .. unicode.sub(pictureString, i, i + 1))))
-		table.insert(picture, color.to24Bit(tonumber("0x" .. unicode.sub(pictureString, i + 2, i + 3))))
-		table.insert(picture, tonumber("0x" .. unicode.sub(pictureString, i + 4, i + 5)) / 255)
-		table.insert(picture, unicode.sub(pictureString, i + 6, i + 6))
+		table.insert(picture[3], color.to24Bit(tonumber("0x" .. unicode.sub(pictureString, i, i + 1))))
+		table.insert(picture[4], color.to24Bit(tonumber("0x" .. unicode.sub(pictureString, i + 2, i + 3))))
+		table.insert(picture[5], tonumber("0x" .. unicode.sub(pictureString, i + 4, i + 5)) / 255)
+		table.insert(picture[6], unicode.sub(pictureString, i + 6, i + 6))
 	end
 
 	return picture
 end
 
--------------------------------------------------- Image processing --------------------------------------------------
+-------------------------------------------------------------------------------
 
 function image.set(picture, x, y, background, foreground, alpha, symbol)
-	local index = image.getImageIndexByCoordinates(x, y, picture[1])
-	picture[index], picture[index + 1], picture[index + 2], picture[index + 3] = background, foreground, alpha, symbol
+	local index = image.getIndex(x, y, picture[1])
+	picture[3][index], picture[4][index], picture[5][index], picture[6][index] = background, foreground, alpha, symbol
 
 	return picture
 end
 
 function image.get(picture, x, y)
-	local index = image.getImageIndexByCoordinates(x, y, picture[1])
-	return picture[index], picture[index + 1], picture[index + 2], picture[index + 3]
+	local index = image.getIndex(x, y, picture[1])
+	return picture[3][index], picture[4][index], picture[5][index], picture[6][index]
 end
 
 function image.getSize(picture)
@@ -245,19 +237,20 @@ function image.getHeight(picture)
 end
 
 function image.transform(picture, newWidth, newHeight)
-	local newPicture, stepWidth, stepHeight, background, foreground, alpha, symbol = {newWidth, newHeight}, picture[1] / newWidth, picture[2] / newHeight
+	local newPicture, stepWidth, stepHeight, background, foreground, alpha, symbol = {newWidth, newHeight, {}, {}, {}, {}}, picture[1] / newWidth, picture[2] / newHeight
 	
 	local x, y = 1, 1
 	for j = 1, newHeight do
 		for i = 1, newWidth do
 			background, foreground, alpha, symbol = image.get(picture, math.floor(x), math.floor(y))
-			table.insert(newPicture, background)
-			table.insert(newPicture, foreground)
-			table.insert(newPicture, alpha)
-			table.insert(newPicture, symbol)
+			table.insert(newPicture[3], background)
+			table.insert(newPicture[4], foreground)
+			table.insert(newPicture[5], alpha)
+			table.insert(newPicture[6], symbol)
 
 			x = x + stepWidth
 		end
+
 		x, y = 1, y + stepHeight
 	end
 
@@ -266,15 +259,15 @@ end
 
 function image.crop(picture, fromX, fromY, width, height)
 	if fromX >= 1 and fromY >= 1 and fromX + width - 1 <= picture[1] and fromY + height - 1 <= picture[2] then
-		local newPicture, background, foreground, alpha, symbol = {width, height}
+		local newPicture, background, foreground, alpha, symbol = {width, height, {}, {}, {}, {}}
 		
 		for y = fromY, fromY + height - 1 do
 			for x = fromX, fromX + width - 1 do
 				background, foreground, alpha, symbol = image.get(picture, x, y)
-				table.insert(newPicture, background)
-				table.insert(newPicture, foreground)
-				table.insert(newPicture, alpha)
-				table.insert(newPicture, symbol)
+				table.insert(newPicture[3], background)
+				table.insert(newPicture[4], foreground)
+				table.insert(newPicture[5], alpha)
+				table.insert(newPicture[6], symbol)
 			end
 		end
 
@@ -285,15 +278,15 @@ function image.crop(picture, fromX, fromY, width, height)
 end
 
 function image.flipHorizontally(picture)
-	local newPicture, background, foreground, alpha, symbol = {picture[1], picture[2]}
+	local newPicture, background, foreground, alpha, symbol = {picture[1], picture[2], {}, {}, {}, {}}
 	
 	for y = 1, picture[2] do
 		for x = picture[1], 1, -1 do
 			background, foreground, alpha, symbol = image.get(picture, x, y)
-			table.insert(newPicture, background)
-			table.insert(newPicture, foreground)
-			table.insert(newPicture, alpha)
-			table.insert(newPicture, symbol)
+			table.insert(newPicture[3], background)
+			table.insert(newPicture[4], foreground)
+			table.insert(newPicture[5], alpha)
+			table.insert(newPicture[6], symbol)
 		end
 	end
 
@@ -301,15 +294,15 @@ function image.flipHorizontally(picture)
 end
 
 function image.flipVertically(picture)
-	local newPicture, background, foreground, alpha, symbol = {picture[1], picture[2]}
+	local newPicture, background, foreground, alpha, symbol = {picture[1], picture[2], {}, {}, {}, {}}
 	
 	for y = picture[2], 1, -1 do
 		for x = 1, picture[1] do
 			background, foreground, alpha, symbol = image.get(picture, x, y)
-			table.insert(newPicture, background)
-			table.insert(newPicture, foreground)
-			table.insert(newPicture, alpha)
-			table.insert(newPicture, symbol)
+			table.insert(newPicture[3], background)
+			table.insert(newPicture[4], foreground)
+			table.insert(newPicture[5], alpha)
+			table.insert(newPicture[6], symbol)
 		end
 	end
 
@@ -329,61 +322,13 @@ function image.expand(picture, fromTop, fromBottom, fromLeft, fromRight, backgro
 end
 
 function image.blend(picture, blendColor, transparency)
-	local newPicture = {picture[1], picture[2]}
+	local newPicture = {picture[1], picture[2], {}, {}, {}, {}}
 
-	for i = 3, #picture, 4 do
-		table.insert(newPicture, color.blend(picture[i], blendColor, transparency))
-		table.insert(newPicture, color.blend(picture[i + 1], blendColor, transparency))
-		table.insert(newPicture, picture[i + 2])
-		table.insert(newPicture, picture[i + 3])
-	end
-
-	return newPicture
-end
-
-function image.blur(picture, radius, strength)
-	local blurMatrix = {}
-
-	local xValue, yValue, step = 1, 1, 1 / radius		
-	for y = 0, radius do
-		for x = 0, radius do
-			blurMatrix[y], blurMatrix[-y] = blurMatrix[y] or {}, blurMatrix[-y] or {}
-			
-			blurMatrix[y][x] = (xValue + yValue) / 2 * strength
-			blurMatrix[y][-x], blurMatrix[-y][x], blurMatrix[-y][-x] = blurMatrix[y][x], blurMatrix[y][x], blurMatrix[y][x]
-
-			xValue = xValue - step
-		end
-
-		xValue, yValue = 1, yValue - step
-	end
-
-	local newPicture, xImage, yImage = image.copy(picture)
-	for y = 1, image.getHeight(picture) do
-		for x = 1, image.getWidth(picture) do
-			local backgroundOld, foregroundOld, alpha, symbol = image.get(picture, x, y)
-
-			for yMatrix = -radius, radius do
-				for xMatrix = -radius, radius do
-					xImage, yImage = x + xMatrix, y + yMatrix
-					
-					if xImage >= 1 and xImage <= image.getWidth(picture) and yImage >= 1 and yImage <= image.getHeight(picture) then
-						local backgroundNew, foregroundNew = image.get(newPicture, xImage, yImage)
-
-						image.set(newPicture, xImage, yImage,
-							color.blend(backgroundOld, backgroundNew, blurMatrix[yMatrix][xMatrix]),
-							color.blend(foregroundOld, foregroundNew, blurMatrix[yMatrix][xMatrix]),
-							alpha,
-							symbol
-						)
-					end
-				end
-			end
-		end
-		
-		if y % 2 == 0 then
-			os.sleep(0.05)
-		end
+	for i = 1, #picture[3] do
+		table.insert(newPicture[3], color.blend(picture[3][i], blendColor, transparency))
+		table.insert(newPicture[4], color.blend(picture[4][i], blendColor, transparency))
+		table.insert(newPicture[5], picture[5][i])
+		table.insert(newPicture[6], picture[6][i])
 	end
 
 	return newPicture
@@ -418,28 +363,10 @@ function image.rotate(picture, angle)
 	return newPicture
 end
 
-------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 
 image.loadFormatModule("/lib/FormatModules/OCIF.lua", ".pic")
 
-------------------------------------------------------------------------------------------------------------------------
-
--- local picture = image.load("/MineOS/Pictures/Block.pic")
--- gpu.setBackground(0x2D2D2D)
--- gpu.fill(1, 1, 160, 50, " ")
--- image.draw(2, 2, image.rotate(picture, 180))
-
-------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 
 return image
-
-
-
-
-
-
-
-
-
-
-

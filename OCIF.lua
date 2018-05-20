@@ -2,15 +2,13 @@
 local args = {...}
 local image = args[1]
 
----------------------------------------- Libraries ----------------------------------------
-
 local bit32 = require("bit32")
 require("advancedLua")
 local unicode = require("unicode")
 local fs = require("filesystem")
 local color = require("color")
 
-------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 local module = {}
 local OCIFSignature = "OCIF"
@@ -19,7 +17,7 @@ local encodingMethods = {
 	save = {}
 }
 
-------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 local function writeByteArrayToFile(file, byteArray)
 	for i = 1, #byteArray do
@@ -36,30 +34,30 @@ local function readNumberFromFile(file, countOfBytes)
 	return bit32.byteArrayToNumber(byteArray)
 end
 
----------------------------------------- Uncompressed OCIF1 encoding ----------------------------------------
+--------------------------------------------------------------------------------
 
 encodingMethods.save[5] = function(file, picture)
-	for i = 3, #picture, 4 do
-		file:write(string.char(color.to8Bit(picture[i])))
-		file:write(string.char(color.to8Bit(picture[i + 1])))
-		file:write(string.char(math.floor(picture[i + 2] * 255)))
-		writeByteArrayToFile(file, {string.byte(picture[i + 3], 1, 6)})
+	for i = 1, #picture[3] do
+		file:write(string.char(color.to8Bit(picture[3][i])))
+		file:write(string.char(color.to8Bit(picture[4][i])))
+		file:write(string.char(math.floor(picture[5][i] * 255)))
+		writeByteArrayToFile(file, {string.byte(picture[6][i], 1, 6)})
 	end
 end
 
 encodingMethods.load[5] = function(file, picture)
-	table.insert(picture, readNumberFromFile(file, 2))
-	table.insert(picture, readNumberFromFile(file, 2))
+	picture[1] = readNumberFromFile(file, 2)
+	picture[2] = readNumberFromFile(file, 2)
 
 	for i = 1, image.getWidth(picture) * image.getHeight(picture) do
-		table.insert(picture, color.to24Bit(string.byte(file:read(1))))
-		table.insert(picture, color.to24Bit(string.byte(file:read(1))))
-		table.insert(picture, string.byte(file:read(1)) / 255)
-		table.insert(picture, fs.readUnicodeChar(file))
+		table.insert(picture[3], color.to24Bit(string.byte(file:read(1))))
+		table.insert(picture[4], color.to24Bit(string.byte(file:read(1))))
+		table.insert(picture[5], string.byte(file:read(1)) / 255)
+		table.insert(picture[6], fs.readUnicodeChar(file))
 	end
 end
 
----------------------------------------- Grouped and compressed OCIF6 encoding ----------------------------------------
+--------------------------------------------------------------------------------
 
 encodingMethods.save[6] = function(file, picture)
 	-- Grouping picture by it's alphas, symbols and colors
@@ -108,8 +106,8 @@ encodingMethods.save[6] = function(file, picture)
 end
 
 encodingMethods.load[6] = function(file, picture)
-	table.insert(picture, string.byte(file:read(1)))
-	table.insert(picture, string.byte(file:read(1)))
+	picture[1] = string.byte(file:read(1))
+	picture[2] = string.byte(file:read(1))
 
 	local currentAlpha, currentSymbol, currentBackground, currentForeground, currentY, currentX
 	local alphaSize, symbolSize, backgroundSize, foregroundSize, ySize, xSize
@@ -147,7 +145,7 @@ encodingMethods.load[6] = function(file, picture)
 	end
 end
 
----------------------------------------- Public load&save methods of module ----------------------------------------
+--------------------------------------------------------------------------------
 
 function module.load(path)
 	local file, reason = io.open(path, "rb")
@@ -156,10 +154,10 @@ function module.load(path)
 		if readedSignature == OCIFSignature then
 			local encodingMethod = string.byte(file:read(1))
 			if encodingMethods.load[encodingMethod] then
-				local picture = {}
+				local picture = {1, 1, {}, {}, {}, {}}
 				encodingMethods.load[encodingMethod](file, picture)
 
-				file:close()	
+				file:close()
 				return picture
 			else
 				file:close()
@@ -193,9 +191,6 @@ function module.save(path, picture, encodingMethod)
 		return false, "Failed to open file for writing: " .. tostring(reason)
 	end
 end
-
-------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 return module
-
-
