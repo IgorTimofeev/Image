@@ -213,6 +213,7 @@ end
 -------------------------------------------------------------------------------
 
 function image.set(picture, x, y, background, foreground, alpha, symbol)
+        checkArg(1, picture, "table")
 	local index = image.getIndex(x, y, picture[1])
 	picture[3][index], picture[4][index], picture[5][index], picture[6][index] = background, foreground, alpha, symbol
 
@@ -220,19 +221,23 @@ function image.set(picture, x, y, background, foreground, alpha, symbol)
 end
 
 function image.get(picture, x, y)
+        checkArg(1, picture, "table")
 	local index = image.getIndex(x, y, picture[1])
 	return picture[3][index], picture[4][index], picture[5][index], picture[6][index]
 end
 
 function image.getSize(picture)
+        checkArg(1, picture, "table")
 	return picture[1], picture[2]
 end
 
 function image.getWidth(picture)
+        checkArg(1, picture, "table")
 	return picture[1]
 end
 
 function image.getHeight(picture)
+        checkArg(1, picture, "table")
 	return picture[2]
 end
 
