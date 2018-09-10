@@ -119,20 +119,6 @@ function image.copy(picture)
 	return newPicture
 end
 
-function image.optimize(picture)
-	for i = 1, #picture[3] do
-		if picture[3][i] == picture[4][i] and (picture[6][i] == "▄" or picture[6][i] == "▀") then
-			picture[6][i] = " "
-		end
-		
-		if picture[6][i] == " " then		
-			picture[4][i] = 0x0
-		end
-	end
-
-	return picture
-end
-
 -------------------------------------------------------------------------------
 
 function image.loadFormatModule(path, extension)
@@ -164,7 +150,7 @@ local function loadOrSave(methodName, path, ...)
 end
 
 function image.save(path, picture, encodingMethod)
-	return loadOrSave("save", path, image.optimize(picture), encodingMethod)
+	return loadOrSave("save", path, picture, encodingMethod)
 end
 
 function image.load(path)
